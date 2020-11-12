@@ -1096,7 +1096,9 @@ GetDataFromSourceCode(Application_Links *app, Buffer_ID buffer, Text_Layout_ID t
 {
     Token_Array token_array = get_token_array_from_buffer(app, buffer);
     Range_i64 visible_range = text_layout_get_visible_range(app, text_layout_id);
-    
+	float *data = 0;
+	int data_count = 0;
+
     if(token_array.tokens != 0)
     {
         Token_Iterator_Array it = token_iterator_pos(0, &token_array, start_pos);
@@ -1183,8 +1185,7 @@ GetDataFromSourceCode(Application_Links *app, Buffer_ID buffer, Text_Layout_ID t
                 }
             }
             
-            int data_count = 0;
-            float *data = push_array_zero(arena, float, total_value_count);
+            data = push_array_zero(arena, float, total_value_count);
             for(DataChunk *chunk = first_data_chunk; chunk; chunk = chunk->next)
             {
                 for(int i = 0; i < ArrayCount(chunk->values); i += 1)

@@ -1,5 +1,167 @@
-
 //~ NOTE(rjf): Bindings
+
+
+CUSTOM_COMMAND_SIG(ryanb_search) {
+    Scratch_Block scratch(app);
+    
+    View_ID view = get_active_view(app, Access_ReadVisible);
+    Buffer_ID buffer = view_get_buffer(app, view, Access_ReadVisible);
+    i64 buffer_size = buffer_get_size(app, buffer);
+    
+    i64 pos = view_get_cursor_pos(app, view);
+    String_Const_u8 query_init = push_token_or_word_under_active_cursor(app, scratch);
+    
+    Scan_Direction scan = Scan_Forward;
+    
+    Query_Bar_Group group(app);
+    Query_Bar bar = {};
+    if (start_query_bar(app, &bar, 0) == 0) {
+        return;
+    }
+    
+    u8 bar_string_space[256];
+    bar.string = SCu8(bar_string_space, query_init.size);
+    block_copy(bar.string.str, query_init.str, query_init.size);
+    bar.prompt = string_u8_litexpr("Search: ");
+    
+    b32 do_clear_query = true;
+    u64 match_size = bar.string.size;
+    
+    User_Input in = { };
+    for (;;) {
+        isearch__update_highlight(app, view, Ii64_size(pos, match_size));
+        center_view(app);
+        
+        in = get_next_input(app, EventPropertyGroup_AnyKeyboardEvent, EventProperty_Escape|EventProperty_ViewActivation|EventProperty_MouseButton);
+        if (in.abort) {
+            break;
+        }
+        
+        String_Const_u8 string = to_writable(&in);
+        
+        b32 string_change = false;
+        
+        // allow paste
+        if (match_key_code(&in, KeyCode_V)) {
+            Input_Modifier_Set* mods = &in.event.key.modifiers;
+            if (has_modifier(mods, KeyCode_Control)) {
+                String_Const_u8 paste = push_clipboard_index(app, scratch, 0, 0);
+                if (paste.size > 0) {
+                    bar.string.size = 0;
+                    String_u8 bar_string = Su8(bar.string, sizeof(bar_string_space));
+                    string_append(&bar_string, paste);
+                    bar.string = bar_string.string;
+                    string_change = true;
+                }
+            }
+        }
+        
+        if (string.str != 0 && string.size > 0) {
+            if (do_clear_query) {
+                do_clear_query = false;
+                if (bar.string.size > 0) {
+                    bar.string.size = 0;
+                    string_change = true;
+                }
+            }
+            String_u8 bar_string = Su8(bar.string, sizeof(bar_string_space));
+            string_append(&bar_string, string);
+            bar.string = bar_string.string;
+            string_change = true;
+        }
+        else if (match_key_code(&in, KeyCode_Backspace)) {
+            if (do_clear_query) {
+                do_clear_query = false;
+                if (bar.string.size > 0) {
+                    bar.string.size = 0;
+                    string_change = true;
+                }
+            }
+            else if (is_unmodified_key(&in.event)) {
+                u64 old_bar_string_size = bar.string.size;
+                bar.string = backspace_utf8(bar.string);
+                string_change = (bar.string.size < old_bar_string_size);
+            }
+            else if (has_modifier(&in.event.key.modifiers, KeyCode_Control)) {
+                if (bar.string.size > 0){
+                    bar.string.size = 0;
+                    string_change = true;
+                }
+            }
+        }
+        
+        b32 do_scan_action = false;
+        Scan_Direction change_scan = scan;
+        if (!string_change) {
+            if (match_key_code(&in, KeyCode_Return) || match_key_code(&in, KeyCode_Tab)) {
+                //if (match_key_code(&in, KeyCode_F3)) {// || match_key_code(&in, KeyCode_Tab)) {
+                Input_Modifier_Set* mods = &in.event.key.modifiers;
+                do_scan_action = true;
+                
+                if (has_modifier(mods, KeyCode_Shift)) {
+                    change_scan = Scan_Backward;
+                }
+                else {
+                    change_scan = Scan_Forward;
+                }
+            }
+        }
+        
+        if (string_change){
+            switch (scan){
+                case Scan_Forward: {
+                    i64 new_pos = 0;
+                    seek_string_insensitive_forward(app, buffer, pos - 1, 0, bar.string, &new_pos);
+                    if (new_pos < buffer_size){
+                        pos = new_pos;
+                        match_size = bar.string.size;
+                    }
+                }
+                break;
+                
+                case Scan_Backward: {
+                    i64 new_pos = 0;
+                    seek_string_insensitive_backward(app, buffer, pos + 1, 0, bar.string, &new_pos);
+                    if (new_pos >= 0){
+                        pos = new_pos;
+                        match_size = bar.string.size;
+                    }
+                }
+                break;
+            }
+        }
+        else if (do_scan_action) {
+            scan = change_scan;
+            switch (scan){
+                case Scan_Forward: {
+                    i64 new_pos = 0;
+                    seek_string_insensitive_forward(app, buffer, pos, 0, bar.string, &new_pos);
+                    if (new_pos < buffer_size){
+                        pos = new_pos;
+                        match_size = bar.string.size;
+                    }
+                }
+                break;
+                
+                case Scan_Backward: {
+                    i64 new_pos = 0;
+                    seek_string_insensitive_backward(app, buffer, pos, 0, bar.string, &new_pos);
+                    if (new_pos >= 0){
+                        pos = new_pos;
+                        match_size = bar.string.size;
+                    }
+                }
+                break;
+            }
+        }
+        else{
+            leave_current_input_unhandled(app);
+        }
+    }
+    
+    view_disable_highlight_range(app, view);
+    view_set_cursor_and_preferred_x(app, view, seek_pos(pos));
+}
 
 static Key_Code
 F4_MapStringToKeyCode(String_Const_u8 key_string)
@@ -129,7 +291,8 @@ F4_LoadBindingsFromFile(Application_Links *app, Mapping *mapping, String_Const_u
                             }
                             else
                             {
-                                config_add_error(scratch, parsed, node->result.pos, keycode ? "Invalid command" : command ? "Invalid key": "Invalid command and key");
+                                config_add_error(scratch, parsed, node->result.pos, (char*)
+                                                 (keycode ? "Invalid command" : ((command) ? "Invalid key": "Invalid command and key")));
                             }
                             
                         }
@@ -185,8 +348,8 @@ F4_SetDefaultBindings(Mapping *mapping)
     Bind(keyboard_macro_start_recording , KeyCode_U, KeyCode_Control);
     Bind(keyboard_macro_finish_recording, KeyCode_U, KeyCode_Control, KeyCode_Shift);
     Bind(keyboard_macro_replay,           KeyCode_U, KeyCode_Alt);
-    Bind(change_active_panel,           KeyCode_Comma, KeyCode_Control);
-    Bind(change_active_panel_backwards, KeyCode_Comma, KeyCode_Control, KeyCode_Shift);
+    Bind(change_active_panel,           KeyCode_W, KeyCode_Alt);
+    Bind(change_active_panel_backwards, KeyCode_W, KeyCode_Alt, KeyCode_Shift);
     Bind(interactive_new,               KeyCode_N, KeyCode_Control);
     Bind(interactive_open_or_new,       KeyCode_O, KeyCode_Control);
     Bind(open_in_other,                 KeyCode_O, KeyCode_Alt);
@@ -195,7 +358,7 @@ F4_SetDefaultBindings(Mapping *mapping)
     Bind(project_go_to_root_directory,  KeyCode_H, KeyCode_Control);
     Bind(save_all_dirty_buffers,        KeyCode_S, KeyCode_Control, KeyCode_Shift);
     Bind(change_to_build_panel,         KeyCode_Period, KeyCode_Alt);
-    Bind(close_build_panel,             KeyCode_Comma, KeyCode_Alt);
+    Bind(close_build_panel,             KeyCode_Period, KeyCode_Alt, KeyCode_Shift);
     Bind(goto_next_jump,                KeyCode_N, KeyCode_Alt);
     Bind(goto_prev_jump,                KeyCode_N, KeyCode_Alt, KeyCode_Shift);
     Bind(build_in_build_panel,          KeyCode_M, KeyCode_Alt);
@@ -208,7 +371,7 @@ F4_SetDefaultBindings(Mapping *mapping)
     Bind(list_all_functions_current_buffer_lister, KeyCode_I, KeyCode_Control, KeyCode_Shift);
     Bind(project_fkey_command, KeyCode_F1);
     Bind(project_fkey_command, KeyCode_F2);
-    Bind(project_fkey_command, KeyCode_F3);
+    //Bind(project_fkey_command, KeyCode_F3);
     Bind(project_fkey_command, KeyCode_F4);
     Bind(project_fkey_command, KeyCode_F5);
     Bind(project_fkey_command, KeyCode_F6);
@@ -227,11 +390,11 @@ F4_SetDefaultBindings(Mapping *mapping)
     {
         Bind(open_panel_vsplit, KeyCode_P, KeyCode_Control);
         Bind(open_panel_hsplit, KeyCode_Minus, KeyCode_Control);
-        Bind(close_panel, KeyCode_P, KeyCode_Control, KeyCode_Shift);
+        Bind(close_panel, KeyCode_W, KeyCode_Control, KeyCode_Shift);
         Bind(fleury_place_cursor, KeyCode_Tick, KeyCode_Alt);
-        Bind(fleury_toggle_power_mode, KeyCode_P, KeyCode_Alt);
+        //Bind(fleury_toggle_power_mode, KeyCode_P, KeyCode_Alt);
         Bind(jump_to_definition, KeyCode_J, KeyCode_Control);
-        Bind(fleury_toggle_battery_saver, KeyCode_Tick, KeyCode_Alt);
+        //Bind(fleury_toggle_battery_saver, KeyCode_Tick, KeyCode_Alt);
     }
     
     SelectMap(mapid_file);
@@ -265,12 +428,13 @@ F4_SetDefaultBindings(Mapping *mapping)
     Bind(delete_line,                 KeyCode_D, KeyCode_Control, KeyCode_Shift);
     Bind(center_view,                 KeyCode_E, KeyCode_Control);
     Bind(left_adjust_view,            KeyCode_E, KeyCode_Control, KeyCode_Shift);
-    Bind(search,                      KeyCode_F, KeyCode_Control);
+    // Bind(search,                      KeyCode_F, KeyCode_Control);
+    Bind(ryanb_search,                KeyCode_F, KeyCode_Control);
     Bind(list_all_locations,          KeyCode_F, KeyCode_Control, KeyCode_Shift);
     Bind(list_all_substring_locations_case_insensitive, KeyCode_F, KeyCode_Alt);
     Bind(goto_line,                   KeyCode_G, KeyCode_Control);
     Bind(list_all_locations_of_selection,  KeyCode_G, KeyCode_Control, KeyCode_Shift);
-    Bind(snippet_lister,              KeyCode_J, KeyCode_Control);
+    //Bind(snippet_lister,              KeyCode_J, KeyCode_Control);
     Bind(kill_buffer,                 KeyCode_K, KeyCode_Control, KeyCode_Shift);
     Bind(duplicate_line,              KeyCode_L, KeyCode_Control);
     Bind(cursor_mark_swap,            KeyCode_M, KeyCode_Control);
@@ -290,18 +454,18 @@ F4_SetDefaultBindings(Mapping *mapping)
     Bind(undo,                        KeyCode_Z, KeyCode_Control);
     Bind(view_buffer_other_panel,     KeyCode_1, KeyCode_Control);
     Bind(swap_panels,                 KeyCode_2, KeyCode_Control);
-    Bind(if_read_only_goto_position,  KeyCode_Return);
-    Bind(if_read_only_goto_position_same_panel, KeyCode_Return, KeyCode_Shift);
-    Bind(view_jump_list_with_lister,  KeyCode_Period, KeyCode_Control, KeyCode_Shift);
+    // Bind(if_read_only_goto_position,  KeyCode_Return);
+    // Bind(if_read_only_goto_position_same_panel, KeyCode_Return, KeyCode_Shift);
+    //Bind(view_jump_list_with_lister,  KeyCode_Period, KeyCode_Control, KeyCode_Shift);
     
     // NOTE(rjf): Custom bindings.
     {
         Bind(fleury_code_peek,          KeyCode_Alt, KeyCode_Control);
         Bind(fleury_close_code_peek,    KeyCode_Escape);
-        Bind(fleury_code_peek_go,       KeyCode_Return, KeyCode_Control);
-        Bind(fleury_code_peek_go_same_panel, KeyCode_Return, KeyCode_Control, KeyCode_Shift);
+        // Bind(fleury_code_peek_go,       KeyCode_Return, KeyCode_Control);
+        // Bind(fleury_code_peek_go_same_panel, KeyCode_Return, KeyCode_Control, KeyCode_Shift);
         Bind(fleury_write_zero_struct,  KeyCode_0, KeyCode_Control);
-        Bind(fleury_smart_replace_identifier,      KeyCode_W, KeyCode_Alt);
+        Bind(fleury_smart_replace_identifier,     KeyCode_R, KeyCode_Control, KeyCode_Shift);
     }
     
     SelectMap(mapid_code);
@@ -311,7 +475,7 @@ F4_SetDefaultBindings(Mapping *mapping)
     Bind(move_right_alpha_numeric_boundary,          KeyCode_Right, KeyCode_Control);
     Bind(move_left_alpha_numeric_or_camel_boundary,  KeyCode_Left, KeyCode_Alt);
     Bind(move_right_alpha_numeric_or_camel_boundary, KeyCode_Right, KeyCode_Alt);
-    Bind(comment_line_toggle,        KeyCode_Semicolon, KeyCode_Control);
+    Bind(comment_line_toggle,        KeyCode_ForwardSlash, KeyCode_Control);
     Bind(word_complete,              KeyCode_Tab);
     Bind(auto_indent_range,          KeyCode_Tab, KeyCode_Control);
     Bind(auto_indent_line_at_cursor, KeyCode_Tab, KeyCode_Shift);

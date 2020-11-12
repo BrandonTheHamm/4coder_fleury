@@ -1441,8 +1441,8 @@ F4_RenderBuffer(Application_Links *app, View_ID view_id, Face_ID face_id,
     
     // NOTE(allen): Cursor shape
     Face_Metrics metrics = get_face_metrics(app, face_id);
-    f32 cursor_roundness = (metrics.normal_advance*0.5f)*0.9f;
-    f32 mark_thickness = 2.f;
+    f32 cursor_roundness = 0.0;//(metrics.normal_advance*0.5f)*0.9f;
+    f32 mark_thickness = 1.f;
     
     // NOTE(allen): Cursor
     switch (fcoder_mode)
