@@ -352,7 +352,7 @@ F4_SetDefaultBindings(Mapping *mapping)
     Bind(change_active_panel_backwards, KeyCode_W, KeyCode_Alt, KeyCode_Shift);
     Bind(interactive_new,               KeyCode_N, KeyCode_Control);
     Bind(interactive_open_or_new,       KeyCode_O, KeyCode_Control);
-    Bind(open_in_other,                 KeyCode_O, KeyCode_Alt);
+    Bind(open_in_other,                 KeyCode_O, KeyCode_Alt, KeyCode_Shift);
     Bind(interactive_kill_buffer,       KeyCode_K, KeyCode_Control);
     Bind(interactive_switch_buffer,     KeyCode_I, KeyCode_Control);
     Bind(project_go_to_root_directory,  KeyCode_H, KeyCode_Control);
@@ -409,8 +409,8 @@ F4_SetDefaultBindings(Mapping *mapping)
     Bind(fleury_home,            KeyCode_Home);
     Bind(page_up,                KeyCode_PageUp);
     Bind(page_down,              KeyCode_PageDown);
-    Bind(goto_beginning_of_file, KeyCode_PageUp, KeyCode_Control);
-    Bind(goto_end_of_file,       KeyCode_PageDown, KeyCode_Control);
+    Bind(goto_beginning_of_file, KeyCode_Home, KeyCode_Control);
+    Bind(goto_end_of_file,       KeyCode_End, KeyCode_Control);    
     Bind(move_up_to_blank_line_end,        KeyCode_Up, KeyCode_Control);
     Bind(move_down_to_blank_line_end,      KeyCode_Down, KeyCode_Control);
     Bind(move_left_whitespace_boundary,    KeyCode_Left, KeyCode_Control);
@@ -435,7 +435,10 @@ F4_SetDefaultBindings(Mapping *mapping)
     Bind(goto_line,                   KeyCode_G, KeyCode_Control);
     Bind(list_all_locations_of_selection,  KeyCode_G, KeyCode_Control, KeyCode_Shift);
     //Bind(snippet_lister,              KeyCode_J, KeyCode_Control);
+    
     Bind(kill_buffer,                 KeyCode_K, KeyCode_Control, KeyCode_Shift);
+    Bind(kill_buffer,                 KeyCode_W, KeyCode_Control);
+    
     Bind(duplicate_line,              KeyCode_L, KeyCode_Control);
     Bind(cursor_mark_swap,            KeyCode_M, KeyCode_Control);
     Bind(reopen,                      KeyCode_O, KeyCode_Control, KeyCode_Shift);
@@ -498,6 +501,7 @@ F4_SetDefaultBindings(Mapping *mapping)
     Bind(delete_current_scope,       KeyCode_Minus, KeyCode_Alt);
     Bind(if0_off,                    KeyCode_I, KeyCode_Alt);
     Bind(open_file_in_quotes,        KeyCode_1, KeyCode_Alt);
-    Bind(open_matching_file_cpp,     KeyCode_2, KeyCode_Alt);
     
+    Bind(open_matching_file_cpp,     KeyCode_O, KeyCode_Alt);
+    Bind(list_all_functions_current_buffer_lister, KeyCode_M, KeyCode_Alt);
 }
